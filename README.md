@@ -2,7 +2,7 @@
 this is a bunch of demos thst go with my llm hands on team ppt
 
 # Image creation
-we use https://huggingface.co/stabilityai/stable-diffusion-2-1
+we use https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0
 in order to work wit it i followed the documentation on that page
 
 but in general
