@@ -1,120 +1,97 @@
 import re
+from typing import Optional
 
 import pandas as pd
 import streamlit as st
-import yfinance as yf
+
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from langgraph_swarm import create_handoff_tool, create_swarm
-from pycoingecko import CoinGeckoAPI
 
-model = ChatOllama(model="qwen3:8b", temperature=0.1)
 
-stock_advisor_prompt = (
-    "You are a stock investment advisor.\n\n"
-    "INSTRUCTIONS:\n"
-    "- Use the provided tools: fetch_stock_info"
-    "- The input to these tools should be a stock symbol like 'AAPL' or 'GOOGL'.\n"
-    "- When asked about a specific stock or company:\n"
-    "  • Retrieve general information like its name, sector, and market cap.\n"
-    "  • Analyze quarterly and annual financials (focus on Total Revenue and Net Income).\n"
-    "  • Review price trends over the past year.\n"
-    "- If the question is about **cryptocurrencies** (e.g., Bitcoin, Ethereum, Solana), "
-    "use the transfer tool to hand off to the crypto advisor agent immediately.\n"
-    "- Provide clear, objective, data-driven insights to support investment decisions.\n"
-    "- Do NOT give disclaimers, speculation, or refer users to external sources.\n"
-    "- Use ONLY the available tool outputs to form your response."
-)
+# --------------------------------------------------------
+# MODEL
+# --------------------------------------------------------
+model = ChatOllama(model="llama3.1", temperature=0.1)
 
-crypto_advisor_prompt = (
-    "You are the active cryptocurrency investment advisor agent.\n\n"
-    "You have received a user query that is specifically about cryptocurrencies.\n"
-    "Your job is to analyze and respond directly using the tools provided.\n\n"
-    "INSTRUCTIONS:\n"
-    "- Use the provided tools: fetch_coin_info.\n"
-    "- The input of the tools should be the coin ID (e.g., 'bitcoin', 'solana'), all in lower case.\n"
-    "- When asked about a cryptocurrency:\n"
-    "  • Explain the coin’s purpose using its description.\n"
-    "  • Provide key metrics such as market cap and rank.\n"
-    "  • Analyze the price history over the past year to identify trends or volatility.\n"
-    "- If the question is about **stocks, ETFs, or traditional financial markets**, "
-    "use the transfer tool to hand off to the stock advisor agent immediately.\n"
-    "- Do NOT try to answer stock-related questions yourself.\n"
-    "- Do NOT give disclaimers, opinions, or refer users elsewhere.\n"
-    "- Base your entire response strictly on the data returned by the tools."
-)
 
+# --------------------------------------------------------
+# HELPERS
+# --------------------------------------------------------
 def clean_text(text: str):
-    cleaned_text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    return cleaned_text.strip()
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
+
+
+    # --------------------------------------------------------
+# TOOLS
+# --------------------------------------------------------
 @tool
 @st.cache_data
 def fetch_stock_info(symbol: str):
-    """Get Company's general information. Input should be the stock symbol, e.g., 'AAPL'."""
-    stock = yf.Ticker(symbol)
+    """Fetch stock financial + price data using Yahoo Finance."""
+    print("Fetching stock info...")
 
-    annual_financials = stock.financials.T[['Total Revenue', 'Net Income']].round(2)
-    annual_financials.index = annual_financials.index.strftime('%Y-%m-%d')
-
-    price_history = stock.history(period='1y', interval='1d').reset_index()
-    price_history['Date'] = pd.to_datetime(price_history['Date']).dt.date
-    price_history = price_history.round(2)
+    annual={"Total Revenue":[100,23,55], "Net Income":[56,12,40]}
 
     return {
         "symbol": symbol,
-        "annual_financials": annual_financials.to_dict(orient='index'),
-        "min_price_last_year": round(price_history['Close'].min(), 2),
-        "max_price_last_year": round(price_history['Close'].max(), 2),
-        "average_price_last_year": round(price_history['Close'].mean(), 2),
-        "current_price": round(price_history['Close'].iloc[-1], 2)
+        "annual_financials": annual,
+        "min_price_last_year": 9,
+        "max_price_last_year": 23,
+        "average_price_last_year": 10.4,
+        "current_price": 12.4,
     }
+
 
 @tool
 @st.cache_data
 def fetch_coin_info(coin_id: str):
-    """Get cryptocurrency general information. Input should be the coin's ID, e.g., 'bitcoin'."""
-    cg = CoinGeckoAPI()
-    coin_info = cg.get_coin_by_id(coin_id)
-    price_history = cg.get_coin_market_chart_by_id(coin_id, vs_currency='usd', days=365)
-    prices = [entry[1] for entry in price_history["prices"]]
+    """Fetch cryptocurrency info + 1-year prices using CoinGecko."""
 
     return {
         "coin": coin_id,
-        "description": coin_info['description']['en'],
-        "market_cap_usd": coin_info['market_data']['market_cap']['usd'],
-        "market_cap_rank": coin_info['market_cap_rank'],
-        "min_price_last_year": round(min(prices), 2),
-        "max_price_last_year": round(max(prices), 2),
-        "average_price_last_year": round(sum(prices) / len(prices), 2),
-        "current_price": round(prices[-1], 2)
+        "description": "great value for money",
+        "market_cap_usd": 100,
+        "market_cap_rank": 125,
+        "min_price_last_year": 20,
+        "max_price_last_year": 35,
+        "average_price_last_year": 30,
+        "current_price": 22.5,
     }
 
-stock_advisor = create_react_agent(
-    model,
+
+# --------------------------------------------------------
+# AGENTS
+# --------------------------------------------------------
+stock_advisor = create_agent(
+    model=model,
     tools=[
         fetch_stock_info,
         create_handoff_tool(
             agent_name="crypto_advisor",
-            description="Use this tool to transfer any queries about the cryptocurrencies like Bitcoin, Ethereum, Solana, etc."
+            description="Transfer to crypto advisor for crypto questions."
         )
     ],
     name="stock_advisor",
 )
 
-crypto_advisor = create_react_agent(
-    model,
+crypto_advisor = create_agent(
+    model=model,
     tools=[
         fetch_coin_info,
         create_handoff_tool(
             agent_name="stock_advisor",
-            description="Use this tool to transfer any queries about the stocks like Apple, Tesla, Microsoft, etc."
+            description="Transfer to stock advisor for equity questions."
         )
     ],
     name="crypto_advisor",
 )
 
+# --------------------------------------------------------
+# SWARM WORKFLOW
+# --------------------------------------------------------
 workflow = create_swarm(
     agents=[stock_advisor, crypto_advisor],
     default_active_agent="stock_advisor"
@@ -122,23 +99,27 @@ workflow = create_swarm(
 
 app = workflow.compile()
 
+
+# --------------------------------------------------------
+# STREAMLIT UI
+# --------------------------------------------------------
 query = st.text_input("Enter your investment inquiry:")
 
 if query:
-    config = {"configurable": {"thread_id": "1"}}
-    result = app.invoke({
-        "messages": [
-            {
-                "role": "user",
-                "content": query
-            }
-        ]
-    })
+    result = app.invoke(
+        {
+            "messages": [
+                {"role": "user", "content": query}
+            ]
+        },
+        config={"configurable": {"thread_id": "1"}}
+    )
 
-    for message in result["messages"]:
-        print(message.pretty_print())
-        print()
+    # Print debug to console
+    for msg in result["messages"]:
+        print(msg)
 
-    response = clean_text(result["messages"][-1].content)
-    st.markdown(response)
+    clean_response = clean_text(result["messages"][-1].content)
+    st.markdown(clean_response)
 
+#test with how is the bitcoin doing?"

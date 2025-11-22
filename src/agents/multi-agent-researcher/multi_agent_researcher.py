@@ -10,7 +10,7 @@ def clean_text(text: str):
     return cleaned_text.strip()
 
 # initialize Ollama model (must be running locally)
-model = ChatOllama(model="llama3.3")  # or llama3, phi3, etc.
+model = ChatOllama(model="llama3.1")  # or llama3, phi3, etc.
 
 # Agent prompts
 query_refiner_prompt = (
@@ -73,3 +73,6 @@ while True:
 
     research_result = clean_text(result["messages"][-1].content)
     print(f"\n🤖 Agent: {research_result}\n{'-'*60}\n")
+
+
+#ask about taylor's method for function solving
