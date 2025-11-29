@@ -181,3 +181,10 @@ cython_debug/
 .cursorindexingignore
 
 .idea/*
+src/lora/json_extraction_dataset_500.json
+src/lora/llama.cpp/
+src/lora/models/Phi-3-mini-4k-instruct-bnb-4bit/
+/src/lora/outputs
+/src/lora/retrained_model
+/src/lora/unsloth_compiled_cache/.locks
+/src/lora/unsloth_compiled_cache
