@@ -14,7 +14,7 @@ class OllamaMCPClient:
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
 
-    def load_server_config(self,name: str, path="mcp_config.json"):
+    def load_server_config(self,name: str, path=".\mcp_config.json"):
         config = json.loads(Path(path).read_text())
         server_cfg = config["servers"][name]
 

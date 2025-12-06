@@ -12,9 +12,40 @@ from langgraph_swarm import create_handoff_tool, create_swarm
 # --------------------------------------------------------
 # MODEL
 # --------------------------------------------------------
-model = ChatOllama(model="llama3.1", temperature=0.1)
+model = ChatOllama(model="llama3.1")
 
 
+stock_advisor_prompt = (
+    "You are a stock investment advisor.\n\n"
+    "INSTRUCTIONS:\n"
+    "- Use the provided tools: fetch_stock_info"
+    "- The input to these tools should be a stock symbol like 'AAPL' or 'GOOGL'.\n"
+    "- When asked about a specific stock or company:\n"
+    "  • Retrieve general information like its name, sector, and market cap.\n"
+    "  • Analyze quarterly and annual financials (focus on Total Revenue and Net Income).\n"
+    "  • Review price trends over the past year.\n"
+    "- If the question is about **cats**  "
+    "use the transfer tool to hand off to the cat advisor agent immediately.\n"
+    "- Provide clear, objective, data-driven insights to support investment decisions.\n"
+    "- Do NOT give disclaimers, speculation, or refer users to external sources.\n"
+    "- Use ONLY the available tool outputs to form your response."
+)
+
+cat_advisor_prompt = (
+    "You are the active cat agent.\n\n"
+    "You have received a user query that is specifically about cats.\n"
+    "Your job is to be supportive of cats.\n\n"
+    "INSTRUCTIONS:\n"
+    "- Use the provided tools: fetch_cat_info\n"
+    "- When asked about a cats:\n"
+    "  • say mewo 3 times.\n"
+    "  • use fetch_cat_info.\n"
+    "- If the question is about **stocks, ETFs, or traditional financial markets**, "
+    "use the transfer tool to hand off to the stock advisor agent immediately.\n"
+    "- Do NOT try to answer stock-related questions yourself.\n"
+    "- Do NOT give disclaimers, opinions, or refer users elsewhere.\n"
+    "- Base your entire response strictly on the data returned by the tools."
+)
 # --------------------------------------------------------
 # HELPERS
 # --------------------------------------------------------
@@ -23,9 +54,16 @@ def clean_text(text: str):
 
 
 
-    # --------------------------------------------------------
-# TOOLS
-# --------------------------------------------------------
+@tool
+def fetch_cat_info():
+    '''Return cat facts.'''
+    print("Fetching cat info...")
+
+    return {
+        "only completely needy people do not like cats"
+    }
+
+
 @tool
 def fetch_stock_info(symbol: str):
     """Fetch stock financial + price data using Yahoo Finance."""
@@ -43,54 +81,42 @@ def fetch_stock_info(symbol: str):
     }
 
 
-@tool
-def fetch_coin_info(coin_id: str):
-    """Fetch cryptocurrency info + 1-year prices using CoinGecko."""
-
-    return {
-        "coin": coin_id,
-        "description": "great value for money",
-        "market_cap_usd": 100,
-        "market_cap_rank": 125,
-        "min_price_last_year": 20,
-        "max_price_last_year": 35,
-        "average_price_last_year": 30,
-        "current_price": 22.5,
-    }
-
 
 # --------------------------------------------------------
 # AGENTS
 # --------------------------------------------------------
 stock_advisor = create_agent(
     model=model,
+    system_prompt=stock_advisor_prompt,
     tools=[
         fetch_stock_info,
         create_handoff_tool(
-            agent_name="crypto_advisor",
-            description="Transfer to crypto advisor for crypto questions."
+            agent_name="cat_advisor",
+            description="Use this tool to transfer any queries about cats."
         )
     ],
     name="stock_advisor",
 )
 
-crypto_advisor = create_agent(
+cat_advisor = create_agent(
     model=model,
+    system_prompt=cat_advisor_prompt,
     tools=[
-        fetch_coin_info,
+        fetch_cat_info,
         create_handoff_tool(
             agent_name="stock_advisor",
-            description="Transfer to stock advisor for equity questions."
+            description="Use this tool to transfer any queries about the stocks like Apple, Tesla, Microsoft, etc."
+
         )
     ],
-    name="crypto_advisor",
+    name="cat_advisor",
 )
 
 # --------------------------------------------------------
 # SWARM WORKFLOW
 # --------------------------------------------------------
 workflow = create_swarm(
-    agents=[stock_advisor, crypto_advisor],
+    agents=[stock_advisor, cat_advisor],
     default_active_agent="stock_advisor"
 )
 
@@ -116,4 +142,3 @@ while True:
     research_result = clean_text(result["messages"][-1].content)
     print(f"\n🤖 Agent: {research_result}\n{'-'*60}\n")
 
-#test with how is the bitcoin doing?"
